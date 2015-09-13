@@ -1,38 +1,37 @@
 * Conkeror Password Manager
 Extension for [[http://conkeror.org/][Conkeror]] browser that provides facilities to manage passwords using LastPass, and possibly other password managers in the future.
 * Features
-** Fill passwords
-** Generate and save passwords
+  - Fill passwords
+  - Generate and save passwords
 * Requirements
 ** Lastpass CLI
- Install LastPass CLI from https://github.com/LastPass/lastpass-cli. 
-
- If using Multi-factor Authentication, trust the computer you are working on by typing:
-#+begin_src sh
-lpass login --trust <YOUR LASTPASS LOGIN>
-#+end_src
+ - Install LastPass CLI from https://github.com/LastPass/lastpass-cli. 
+ - If using Multi-factor Authentication, trust the computer you are working on by typing:
+    #+begin_src sh
+    lpass login --trust <YOUR LASTPASS LOGIN>
+    #+end_src
 * Installation steps
-** Install Lastpass CLI (see above)
-** Clone this repository into your home directory, or anywhere else (I prefer $HOME/.conkerorrc/modules)
-** Require this module and configure module
-#+begin_src js
-load_paths.push("<YOUR REPOSITORY DIRECTORY>");
-require('conkeror-password-manage');
-passwd_manage_lastpass_username = "YOUR EMAIL ADDRESS";
-#+end_src
-** Restart conkeror
+  - Install Lastpass CLI (see above)
+  - Clone this repository into your home directory, or anywhere else (I prefer $HOME/.conkerorrc/modules)
+  - Require this module and configure module
+    #+begin_src js
+    load_paths.push("<YOUR REPOSITORY DIRECTORY>");
+    require('conkeror-password-manage');
+    passwd_manage_lastpass_username = "YOUR EMAIL ADDRESS";
+    #+end_src
+  - Restart conkeror
 * Usage
 ** Fill passwords
-1. Visit the page on which you want to fill passwords
-2. Press C-t (passwd-get-username-and-password)
-3. Enter your LastPass master password if prompted
-4. Answer the questions or accept the defaults
-5. Username and password should be pasted into login/password fields, can also use C-j (passwd-set-value) to paste username (first press) and then the password (second press) into the focused text box
+- Visit the page on which you want to fill passwords
+- Press C-t (passwd-get-username-and-password)
+- Enter your LastPass master password if prompted
+- Answer the questions or accept the defaults
+- Username and password should be pasted into login/password fields, can also use C-j (passwd-set-value) to paste username (first press) and then the password (second press) into the focused text box
 ** Generate passwords
-*** Visit the page where you want to create an account
-*** Press C-w x (passwd-generate-and-save)
-*** Answer the questions or accept the defaults
-*** New site will be added to LastPass, and generated password can be pasted into focused field by pressing C-j (passwd-set-value)
+- Visit the page where you want to create an account
+- Press C-w x (passwd-generate-and-save)
+- Answer the questions or accept the defaults
+- New site will be added to LastPass, and generated password can be pasted into focused field by pressing C-j (passwd-set-value)
 * Licence/Legal
 See COPYING for terms
 
