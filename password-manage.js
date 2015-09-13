@@ -13,9 +13,9 @@
         this.login = login;
         this.masterpassword = "";
     };
-    LastPass.prototype.ensure_we_have_masterpassword = function() {
+    LastPass.prototype.ensure_we_have_masterpassword = function(force) {
         I = this.I;
-        if (this.masterpassword)
+        if (this.masterpassword && !force)
             return;
         this.masterpassword = yield I.minibuffer.read($prompt = "please enter lastpass master password: ");
     };
@@ -26,7 +26,7 @@
         window.minibuffer.message(message);
     };
 
-    LastPass.prototype.get_command = function(comm, input){
+    LastPass.prototype.get_command = function(comm, input, force_masterpass_ask=false){
         debug(`executing provided shell command: ${comm} and returning results as an object containing data, error and return_code`);
         assertNotEmpty(comm, "comm");
         var self = this;
@@ -39,14 +39,29 @@
                                                  { input: async_binary_reader(function (s) results.data+=s||"") },
                                                  { input: async_binary_reader(function (s) results.error+=s||"") }]);
         results.return_code = result;
-        if (/find decryption key/.test(results.error) ){
+        if (/Google Authenticator Code/m.test(results.error)){
+            throw new interactive_error("ERROR: Please trust this computer by running 'lpass login --trust YOUR_LOGIN'");
+        }
+        else if (/find decryption key/m.test(results.error) ||
+                 /Failed to enter correct password/m.test(results.error)){
             debug(`trying to log into lastpass`);
-            yield self.ensure_we_have_masterpassword();
+            yield self.ensure_we_have_masterpassword(force_masterpass_ask);
             yield self.get_command(`lpass login ${this.login}`, self.masterpassword);
             self.echo_message("logging in to lastpass");
-            results = yield self.get_command(comm, input);
+            results = yield self.get_command(comm, input, true);
+            return;
         }
-        debug(`received the following results from running the command: ${dump_obj(results)}`);
+        else if (results.error) {
+            throw new interactive_error(`error received from LastPass - ${results.error}`);
+        }
+        else if (!results.error && !results.data){
+            throw new interactive_error(`no result retrieved from LastPass`);
+        }
+        else if (results.code == 256){
+            throw new interactive_error('error 256 returned from LastPass');
+        }
+        results.data = results.data.trim();
+        debug(`received the following results from running the command: ${JSON.stringify(results)}`);
         yield co_return(results);
     };
     LastPass.prototype.generate_and_save_password = function (domain, username, length, include_symbols=true) {
@@ -257,9 +272,9 @@
                     var symbols = yield I.minibuffer.read_yes_or_no($prompt = "include symbols? ", $initial_value='yes');
 
                     var password = yield lp.generate_and_save_password(domain, username, length, symbols);
-                    lp.echo_message(`Press ${passwd_manage_password_paste_key} to paste password into password field`);
                     debug(`CONFIDENTIAL: retrieved password ${password} from lastpass`);
                     setup_value_paster(I, password, 'password');
+                    lp.echo_message(`Press ${passwd_manage_password_paste_key} to paste password into password field`);
                 });
 
     function setup_value_paster(I, value, type, onSuccess=null){
@@ -290,6 +305,7 @@
     interactive("passwd-get-username-and-password",
                 `retrieves the username and password for given domain, sets 'passwd_manage_password_paste_key' to paste username and then password into focused fields`,
                 function (I) {
+                    debug(`retrieving username and password from password manager (LastPass)`);
                     var lp = new LastPass(I, passwd_manage_lastpass_username);
                     var domain = lp.get_current_domain();
                     domain = yield I.minibuffer.read($prompt = "domain search: ", $initial_value=domain,
@@ -301,9 +317,11 @@
                     debug(`tried to auto fill login and password fields - setting up paster for username and then password in case that failed`);
                     var ret = yield lp.get_username_and_password(id);
                     setup_value_paster(I, ret.username, 'username', function(){
-                        debug(`username has been pasted, now loading password into the one-shot paster`);
+                        debug(`now loading password into the one-shot paster`);
                         setup_value_paster(I, ret.password, 'password');
+                        lp.echo_message(`Press ${passwd_manage_password_paste_key} to paste password into password field`);
                     });
+                    lp.echo_message(`Press ${passwd_manage_password_paste_key} to paste username into username field`);
                 });
     interactive("passwd-set-lastpass-username",
                 "sets the default lastpass username",
