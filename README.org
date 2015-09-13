@@ -23,11 +23,11 @@ passwd_manage_lastpass_username = "YOUR EMAIL ADDRESS";
 ** Restart conkeror
 * Usage
 ** Fill passwords
-*** Visit the page on which you want to fill passwords
-*** Press C-t (passwd-get-username-and-password)
-*** Enter your LastPass master password if prompted
-*** Answer the questions or accept the defaults
-*** Username and password should be pasted into login/password fields, can also use C-j (passwd-set-value) to paste username (first press) and then the password (second press) into the focused text box
+1. Visit the page on which you want to fill passwords
+2. Press C-t (passwd-get-username-and-password)
+3. Enter your LastPass master password if prompted
+4. Answer the questions or accept the defaults
+5. Username and password should be pasted into login/password fields, can also use C-j (passwd-set-value) to paste username (first press) and then the password (second press) into the focused text box
 ** Generate passwords
 *** Visit the page where you want to create an account
 *** Press C-w x (passwd-generate-and-save)
