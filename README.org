@@ -5,7 +5,8 @@ Extension for [[http://conkeror.org/][Conkeror]] browser that provides facilitie
 ** Generate and save passwords
 * Requirements
 ** Lastpass CLI
- Install LastPass CLI from https://github.com/LastPass/lastpass-cli
+ Install LastPass CLI from https://github.com/LastPass/lastpass-cli. 
+
  If using Multi-factor Authentication, trust the computer you are working on by typing:
 #+begin_src sh
 lpass login --trust <YOUR LASTPASS LOGIN>
