@@ -1,5 +1,5 @@
 * Conkeror Password Manager
-Extension for [[http://conkeror.org/][Conkeror]] browser that provides facilities to to manage passwords using LastPass, and possibly other password managers in the future.
+Extension for [[http://conkeror.org/][Conkeror]] browser that provides facilities to manage passwords using LastPass, and possibly other password managers in the future.
 * Features
 ** Fill passwords
 ** Generate and save passwords
@@ -11,14 +11,15 @@ Extension for [[http://conkeror.org/][Conkeror]] browser that provides facilitie
 lpass login --trust <YOUR LASTPASS LOGIN>
 #+end_src
 * Installation steps
-** Clone this repository into your HOME directory (or anywhere else)
-** Copy (or symlink) password-manage.js to your $HOME/.conkerorrc directory
-** Setup your LastPass username
-Seting 'passwd_manage_lastpass_username' in any .js file in your $HOME/.conkerorrc directory, e.g: 
+** Install Lastpass CLI (see above)
+** Clone this repository into your home directory, or anywhere else (I prefer $HOME/.conkerorrc/modules)
+** Require this module and configure module
 #+begin_src js
+load_paths.push("<YOUR REPOSITORY DIRECTORY>");
+require('conkeror-password-manage');
 passwd_manage_lastpass_username = "YOUR EMAIL ADDRESS";
 #+end_src
-** Restart conkeror or press M-x and the type in 'reinit'
+** Restart conkeror
 * Usage
 ** Fill passwords
 *** Visit the page on which you want to fill passwords

@@ -1,6 +1,6 @@
 (function(){
-    debug(`loading passwd-manage module: provides functionality to use external password managers to retrieve and add passwords for Conkeror`);
-    debug(`currently only supports LastPass (http://www.lastpass.com)`);
+    info(`loading passwd-manage module: provides functionality to use external password managers to retrieve and add passwords for Conkeror`);
+    info(`currently only supports LastPass (http://www.lastpass.com)`);
 
     define_variable("passwd_manage_lastpass_username", "",
                     "Default username to login to LastPass");
@@ -8,6 +8,9 @@
                     "NOT WORKING? - Whether to setup the default keybindings");
     define_variable("passwd_manage_password_paste_key", "C-j",
                     "Key to use to paste passwords and usernames into focused text boxes");
+    define_variable("passwd_manage_debug_p", false,
+                    "Enable debug mode. WARNING - this will print confidential material, like your passwords, to the console, and possible other logs!");
+
     var LastPass = function(I, login){
         this.I = I;
         this.login = login;
@@ -216,6 +219,11 @@
     // * Utility functions
     // ** Debug function - ONLY FOR USE DURING DEVELOPMENT, as this function will send sensitive information like passwords to the console log
     function debug(msg){
+        if (typeof passwd_manage_debug_p !== 'undefined' && passwd_manage_debug_p){
+            dumpln(msg);
+        }
+    }
+    function info(msg){
         dumpln(msg);
     }
     function assertNotEmpty(variable, variable_name) {
@@ -237,6 +245,7 @@
                 function (I) {
                     var username = passwd_manage_lastpass_username,
                         domain = "";
+                    assertNotEmpty(username, 'username');
                     var lp = new LastPass(I, username);
                     domain = lp.get_current_domain();
                     debug(`asking user for domain, but providing ${domain} as default`);
@@ -333,9 +342,8 @@
 
     define_key(content_buffer_text_keymap, passwd_manage_password_paste_key, `passwd-set-value`);
     // if (passwd_manage_setup_keybindings_p) {
-    debug("setting up keymappings for password-manage module");
-        define_key(default_global_keymap, "C-t", "passwd-get-username-and-password");
-        define_key(default_global_keymap, "C-x w", "passwd-generate-and-save");
+    define_key(default_global_keymap, "C-t", "passwd-get-username-and-password");
+    define_key(default_global_keymap, "C-x w", "passwd-generate-and-save");
     // }
-    provide("password-manage");
+    provide("conkeror-password-manage");
 })();
