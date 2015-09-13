@@ -34,6 +34,8 @@ Version: 0.1
 - Press C-w x (passwd-generate-and-save)
 - Answer the questions or accept the defaults
 - New site will be added to LastPass, and generated password can be pasted into focused field by pressing C-j (passwd-set-value)
+* Todo
+  - Safety - only paste username and password when actually on the domain specified in LastPass entry
 * Licence/Legal
 See COPYING for terms
 
