@@ -1,5 +1,7 @@
 * Conkeror Password Manager
 Extension for [[http://conkeror.org/][Conkeror]] browser that provides facilities to manage passwords using LastPass, and possibly other password managers in the future.
+
+Version: 0.1
 * Features
   - Fill passwords
   - Generate and save passwords
