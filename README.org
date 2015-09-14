@@ -34,8 +34,12 @@ Version: 0.1
 - Press C-w x (passwd-generate-and-save)
 - Answer the questions or accept the defaults
 - New site will be added to LastPass, and generated password can be pasted into focused field by pressing C-j (passwd-set-value)
+* Limitations
+- On my PC, login prompt is hidden if focus is on a input field - just press ESC to remove focus
+- Site selection is currently just based on the "site name" field in LastPass - this makes it difficult if you have more than one account with a site and the names are the same. For me, most of the time I only have one account with a site, and if I have more, I just name them to include my username in the site.
 * Todo
-  - Safety - only paste username and password when actually on the domain specified in LastPass entry
+- Safety - only paste username and password when actually on the domain specified in LastPass entry
+- Add ability to edit usernames and passwords for existing sites
 * Licence/Legal
 See COPYING for terms
 
