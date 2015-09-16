@@ -42,8 +42,10 @@
         var username = passwd_manage_lastpass_username,
             domain = "";
         assertNotEmpty(username, 'username');
-        var lp = new LastPass(I, username);
-        domain = lp.get_current_domain();
+        var user = new UserInteraction(I);
+        var browser = new BrowserInteraction(I);
+        var lp = new LastPass(user, browser, username);
+        domain = browser.get_current_domain();
         debug(`asking user for domain, but providing ${domain} as default`);
         domain = yield I.minibuffer.read($prompt = "domain: ", $initial_value=domain, $select = true);
         if (!domain){
@@ -81,8 +83,10 @@
 
     function get_username_and_password(I) {
         debug(`retrieving username and password from password manager (LastPass)`);
-        var lp = new LastPass(I, passwd_manage_lastpass_username);
-        var domain = lp.get_current_domain();
+        var user = new UserInteraction(I);
+        var browser = new BrowserInteraction(I);
+        var lp = new LastPass(user, browser, passwd_manage_lastpass_username);
+        var domain = browser.get_current_domain();
         domain = yield I.minibuffer.read($prompt = "domain search: ", $initial_value=domain,
                                          $select = true
                                         );
@@ -124,21 +128,130 @@
         I.window.setTimeout(onSuccess, 30000);
     }
 
-    // * LastPass class definition
-    var LastPass = function(I, login){
+    var UserInteraction = function(I) {
         this.I = I;
+    };
+
+    UserInteraction.prototype.ask = function(question, _args={}) {
+        var keys = Object.keys(_args);
+        var args = {};
+        keys.forEach(function(key) {
+            args["$" + key] = _args[key];
+        });
+
+        args._processed_keywords = true;
+        var answer = yield this.I.minibuffer.read($prompt = question,
+                                                  forward_keywords(args));
+
+        yield co_return(answer);
+    };
+    UserInteraction.prototype.ask_to_select(question, options, default_option=null) {
+        if (!default_option){
+            default_option = options[0];
+        }
+        var answer = yield this.ask(question, {
+            completer:  get_completer(options),
+            require_match:  true,
+            select:  true,
+            default_completion:  default_option,
+            auto_complete_initial:  true,
+            auto_complete:  true
+        });
+    }
+
+    UserInteraction.prototype.display_message = function(message) {
+        var window = this.I.window;
+        debug(`displaying following message to user: ${message}`);
+        window.minibuffer.message(message);
+    };
+
+
+    var BrowserInteraction = function(I) {
+        this.I = I;
+    };
+
+    BrowserInteraction.prototype.set_login_and_password_fields = function(fields){
+        var document = I.buffer.document;
+        assertNotEmpty(document, 'document');
+        debug(`trying to set login and password fields in HTML using fields ${fields}`);
+
+        // TODO insert filter to only fill fields on the matching url to prevent phising attempts - similar to how LastPass extension does it
+
+        Object.keys(fields).forEach(function(key){
+            debug(`CONFIDENTIDAL: setting value for field ${fields[key]}`);
+            var val = fields[key];
+
+            var el = [document.getElementById(key)];
+            if (!el.length)
+                el = document.getElementsByName(key);
+            if (!el.length)
+                el = document.getElementsByClassName(key);
+
+            el = el[0];
+            if (!el){
+                debug(`could not find a field named ${key} - not setting anything for this field`);
+                return;
+            }
+            el.value = val;
+        });
+    };
+
+    BrowserInteraction.prototype.get_current_domain = function(){
+        var I = this.I;
+        debug(`retrieving current domain (uses a slow hack, but it works and not too worried about performance)`);
+        var domain = I.buffer.document.location.href;
+        var tmp_a = I.buffer.document.createElement('a');
+        tmp_a.href = domain;
+        domain = tmp_a.hostname;
+        debug(`found current domain: ${domain}`);
+        return domain;
+    };
+
+
+    // * LastPass class definition
+    var LastPass = function(user, browser, login){
+        this.user = user;
+        this.browser = browser;
         this.login = login;
         this.masterpassword = "";
     };
+
+    LastPass.prototype.generate_and_save_password = function (domain, username, length, include_symbols=true) {
+        debug("using lastpass to generate password, and then save that password against the supplied username and domain");
+        assertNotEmpty(domain, 'domain');
+        assertNotEmpty(username, 'username');
+        assertNotEmpty(length, 'length');
+
+        var no_symbols = "";
+        if (!include_symbols){
+            no_symbols = "--no-symbols";
+        }
+        var command = `lpass generate ${no_symbols} --username="${username}" --url="${domain}" "${username} - ${domain}" ${length}`;
+        var results = yield this.get_command(command);
+        yield co_return(results.data);
+    };
+
+    LastPass.prototype.get_username_and_password = function(siteId) {
+        assertNotEmpty(siteId, 'siteId');
+        debug(`retrieving username and password for site with id ${siteId}`);
+
+        var username = yield this._get_lastpass_value(siteId, 'username');
+        var password = yield this._get_lastpass_value(siteId, 'password');
+
+        yield co_return({
+            username: username.data,
+            password: password.data
+        });
+    };
+
     LastPass.prototype.ensure_we_have_masterpassword = function(force) {
-        var I = this.I;
         if (this.masterpassword && !force)
             return;
-        this.masterpassword = yield I.minibuffer.read($prompt = "please enter lastpass master password: ");
+        this.masterpassword = yield this.user.ask( "please enter lastpass master password: ");
     };
 
     LastPass.prototype.echo_message = function(message) {
-        echo_message(this.I, message);
+        this.user.display_message(message);
     };
 
     LastPass.prototype.get_command = function(comm, input, force_masterpass_ask=false){
@@ -156,7 +269,7 @@
             debug(`trying to log into lastpass`);
             yield self.ensure_we_have_masterpassword(force_masterpass_ask);
             yield self.get_command(`lpass login ${this.login}`, self.masterpassword);
-            self.echo_message("logging in to lastpass");
+            self.user.dispay_message("logging in to lastpass");
             results = yield self.get_command(comm, input, true);
         }
         else if (!results.data && results.error) {
@@ -166,21 +279,6 @@
             throw new interactive_error(`no result retrieved from LastPass`);
         }
         yield co_return(results);
-    };
-
-    LastPass.prototype.generate_and_save_password = function (domain, username, length, include_symbols=true) {
-        debug("using lastpass to generate password, and then save that password against the supplied username and domain");
-        assertNotEmpty(domain, 'domain');
-        assertNotEmpty(username, 'username');
-        assertNotEmpty(length, 'length');
-
-        var no_symbols = "";
-        if (!include_symbols){
-            no_symbols = "--no-symbols";
-        }
-        var command = `lpass generate ${no_symbols} --username="${username}" --url="${domain}" "${username} - ${domain}" ${length}`;
-        var results = yield this.get_command(command);
-        yield co_return(results.data);
     };
 
     LastPass.prototype.search_lpass_for_domain = function(domain) {
@@ -199,7 +297,6 @@
     };
 
     LastPass.prototype.get_site_id_for_domain = function(domain){
-        var I = this.I;
         debug(`retrieving site id from lastpass by searching for the provided domain: ${domain}`);
         assertNotEmpty(domain, 'domain');
 
@@ -211,15 +308,7 @@
         }
         else {
             debug(`more than 1 matching entry found, asking user to select the correct site - found ${matches}`);
-            var site = yield I.minibuffer.read($prompt = "choose site: ",
-                                               $completer = get_completer(matches),
-                                               $require_match = true,
-                                               $select = true,
-                                               $default_completion = matches[0],
-                                               $auto_complete_initial = true,
-                                               $auto_complete = true
-                                              );
-
+            var site = yield this.user.ask_to_select(matches);
             id = site.match(/id: (\d*)\]/)[1];
             debug(`user chose site ${site} with id ${id}`);
         }
@@ -227,7 +316,14 @@
         yield co_return(id);
     };
 
-    LastPass.prototype.get_lastpass_value = function(siteId, type, masterpass=""){
+    LastPass.prototype.set_login_and_password_fields = function(siteId){
+        assertNotEmpty(siteId, 'siteId');
+        debug(`trying to set login and password fields in HTML for site ${siteId}`);
+        var fields = yield this._get_fields(siteId);
+        this.browser.set_login_and_password_fields(fields);
+    };
+
+    LastPass.prototype._get_lastpass_value = function(siteId, type, masterpass=""){
         assertNotEmpty(siteId, 'siteId');
         debug(`querying lastpass site ${siteId} for ${type}`);
 
@@ -237,29 +333,16 @@
         if (/enter the LastPass master password/.test(results.error)) {
             debug(`password protected entry found - need to re-enter LastPass master password`);
             this.ensure_we_have_masterpassword();
-            results = yield this.get_lastpass_value(siteId, type, this.masterpass);
+            results = yield this._get_lastpass_value(siteId, type, this.masterpass);
         }
         yield co_return(results);
     };
 
-    LastPass.prototype.get_username_and_password = function(siteId) {
-        assertNotEmpty(siteId, 'siteId');
-        debug(`retrieving username and password for site with id ${siteId}`);
-
-        var username = yield this.get_lastpass_value(siteId, 'username');
-        var password = yield this.get_lastpass_value(siteId, 'password');
-
-        yield co_return({
-            username: username.data,
-            password: password.data
-        });
-    };
-
-    LastPass.prototype.get_fields = function(siteId) {
+    LastPass.prototype._get_fields = function(siteId) {
         assertNotEmpty(siteId, 'siteId');
         debug(`retrieving HTML field names and values for site ${siteId}`);
 
-        var fields = yield this.get_lastpass_value(siteId, 'all');
+        var fields = yield this._get_lastpass_value(siteId, 'all');
 
         var lines = fields.data.split("\n");
         lines = lines.filter(function(line) {
@@ -268,18 +351,6 @@
         var ret = convert_lines_to_object(lines);
         yield co_return(ret);
 
-    };
-
-    LastPass.prototype.set_login_and_password_fields = function(siteId){
-        var I = this.I;
-        assertNotEmpty(siteId, 'siteId');
-        debug(`trying to set login and password fields in HTML for site ${siteId}`);
-        var fields = yield this.get_fields(siteId);
-        set_login_and_password_fields(fields, I.buffer.document);
-    };
-
-    LastPass.prototype.get_current_domain = function(){
-        return get_current_domain(this.I);
     };
 
     // * Utility functions
@@ -295,25 +366,16 @@
     function assertNotEmpty(variable, variable_name) {
         assert(variable, `${variable_name} cannot be empty`);
     }
-    function get_current_domain(I){
-        debug(`retrieving current domain (uses a slow hack, but it works and not too worried about performance)`);
-        var domain = I.buffer.document.location.href;
-        var tmp_a = I.buffer.document.createElement('a');
-        tmp_a.href = domain;
-        domain = tmp_a.hostname;
-        debug(`found current domain: ${domain}`);
-        return domain;
-    };
     function convert_lines_to_object(lines) {
         var ret = {};
-        lines.forEach(function(it)) {
+        lines.forEach(function(field) {
             field = field.split(":");
             if (field.length === 2){
                 var key = field[0].trim();
                 var val = field[1].trim();
                 ret[key] = val;
             }
-        }
+        });
         return ret;
     }
     function assert(condition, message) {
@@ -330,14 +392,14 @@
             data: "",
             error: ""
         };
-        var result = yield shell_command(comm,
+        var result = yield shell_command(command,
                                          $fds = [{ output: async_binary_string_writer(input) },
                                                  { input: async_binary_reader(function (s) results.data+=s||"") },
                                                  { input: async_binary_reader(function (s) results.error+=s||"") }]);
         results.return_code = result;
-        debug(`received the following results from running the command: ${JSON.stringify(results)}`);
         results.data = results.data.trim();
-        return results;
+        debug(`received the following results from running the command: ${JSON.stringify(results)}`);
+        yield co_return(results);
     }
 
     function get_completer(matches) {
@@ -346,35 +408,5 @@
         );
         return completer;
     }
-
-    function echo_message(I, message) {
-        var window = I.window;
-        debug(`displaying following message to user: ${message}`);
-        window.minibuffer.message(message);
-    };
-    function set_login_and_password_fields(fields, document){
-        assertNotEmpty(document, 'document');
-        debug(`trying to set login and password fields in HTML using fields ${fields}`);
-
-        // TODO insert filter to only fill fields on the matching url to prevent phising attempts - similar to how LastPass extension does it
-
-        Object.keys(fields).forEach(function(key){
-            debug(`CONFIDENTIDAL: setting value for field ${field}`);
-            var val = fields[key];
-
-            var el = [document.getElementById(key)];
-            if (!el.length)
-                el = document.getElementsByName(key);
-            if (!el.length)
-                el = document.getElementsByClassName(key);
-
-            el = el[0];
-            if (!el){
-                debug(`could not find a field named ${key} - not setting anything for this field`);
-                return;
-            }
-            el.value = val;
-        });
-    };
 
 })();
