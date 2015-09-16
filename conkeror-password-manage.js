@@ -45,9 +45,7 @@
         var lp = new LastPass(I, username);
         domain = lp.get_current_domain();
         debug(`asking user for domain, but providing ${domain} as default`);
-        domain = yield I.minibuffer.read($prompt = "domain: ", $initial_value=domain,
-                                         $select = true
-                                        );
+        domain = yield I.minibuffer.read($prompt = "domain: ", $initial_value=domain, $select = true);
         if (!domain){
             lp.echo_message("No domain specified - must specify a domain in order to create new entry");
             return;
@@ -55,8 +53,7 @@
 
         debug(`asking user for username, but providing ${username} as default`);
         username = yield I.minibuffer.read($prompt = "username: ", $initial_value=username,
-                                           $select = true, $history = "passwd-usernames"
-                                          );
+                                           $select = true, $history = "passwd-usernames");
         if (!username){
             lp.echo_message("No username specified - must specify a username in order to create new entry");
             return;
@@ -141,25 +138,16 @@
     };
 
     LastPass.prototype.echo_message = function(message) {
-        var window = this.I.window;
-        debug(`displaying following message to user: ${message}`);
-        window.minibuffer.message(message);
+        echo_message(this.I, message);
     };
 
     LastPass.prototype.get_command = function(comm, input, force_masterpass_ask=false){
         debug(`executing provided shell command: ${comm} and returning results as an object containing data, error and return_code`);
         assertNotEmpty(comm, "comm");
         var self = this;
-        var results = {
-            data: "",
-            error: ""
-        };
-        var result = yield shell_command(comm,
-                                         $fds = [{ output: async_binary_string_writer(input) },
-                                                 { input: async_binary_reader(function (s) results.data+=s||"") },
-                                                 { input: async_binary_reader(function (s) results.error+=s||"") }]);
-        results.return_code = result;
-        debug(`received the following results from running the command: ${JSON.stringify(results)}`);
+
+        var results = yield get_command(comm, input);
+
         if (/Google Authenticator Code/m.test(results.error)){
             throw new interactive_error("ERROR: Please trust this computer by running 'lpass login --trust YOUR_LOGIN'");
         }
@@ -177,47 +165,44 @@
         else if (!results.error && !results.data){
             throw new interactive_error(`no result retrieved from LastPass`);
         }
-        results.data = results.data.trim();
         yield co_return(results);
     };
+
     LastPass.prototype.generate_and_save_password = function (domain, username, length, include_symbols=true) {
         debug("using lastpass to generate password, and then save that password against the supplied username and domain");
         assertNotEmpty(domain, 'domain');
         assertNotEmpty(username, 'username');
         assertNotEmpty(length, 'length');
+
         var no_symbols = "";
         if (!include_symbols){
             no_symbols = "--no-symbols";
         }
-        var results = yield this.get_command(`lpass generate ${no_symbols} --username="${username}" --url="${domain}" "${username} - ${domain}" ${length}`);
+        var command = `lpass generate ${no_symbols} --username="${username}" --url="${domain}" "${username} - ${domain}" ${length}`;
+        var results = yield this.get_command(command);
         yield co_return(results.data);
     };
-    LastPass.prototype.find_lpass_matches = function(domain) {
-        debug("finding a matching site entry (or entries) from lastpass by searching using the provided id");
-        assertNotEmpty(domain, 'domain');
-        var results;
-        this.echo_message("loading lastpass results for " + domain);
-        results = yield this.get_command(`lpass show --id -G ${domain}`);
 
-        this.echo_message("retrieved lastpass results");
-        yield co_return(results);
-    };
     LastPass.prototype.search_lpass_for_domain = function(domain) {
         debug(`searching lastpass for the provided domain: ${domain}`);
         assertNotEmpty(domain, 'domain');
-        var results = yield this.find_lpass_matches(domain);
+
+        var results = yield this.get_command(`lpass show --id -G ${domain}`);
         var matches = results.data.split("\n");
         if (matches.length > 1){
+            debug(`${matches.length} matches found for ${domain}, filtering results to only ones with ids in the name`);
             matches = matches.filter(function(it) {
                 return /\d+/.test(it);
             });
         }
         yield co_return(matches);
     };
+
     LastPass.prototype.get_site_id_for_domain = function(domain){
         var I = this.I;
         debug(`retrieving site id from lastpass by searching for the provided domain: ${domain}`);
         assertNotEmpty(domain, 'domain');
+
         var matches = yield this.search_lpass_for_domain(domain);
         var id;
         if (matches.length == 1){
@@ -226,11 +211,8 @@
         }
         else {
             debug(`more than 1 matching entry found, asking user to select the correct site - found ${matches}`);
-            var completer = new all_word_completer(
-                $completions = matches
-            );
             var site = yield I.minibuffer.read($prompt = "choose site: ",
-                                               $completer = completer,
+                                               $completer = get_completer(matches),
                                                $require_match = true,
                                                $select = true,
                                                $default_completion = matches[0],
@@ -238,8 +220,8 @@
                                                $auto_complete = true
                                               );
 
-            debug("chosen site: " + site);
             id = site.match(/id: (\d*)\]/)[1];
+            debug(`user chose site ${site} with id ${id}`);
         }
         debug(`1 match found or selected: $(id)`);
         yield co_return(id);
@@ -248,8 +230,10 @@
     LastPass.prototype.get_lastpass_value = function(siteId, type, masterpass=""){
         assertNotEmpty(siteId, 'siteId');
         debug(`querying lastpass site ${siteId} for ${type}`);
-        var command = "lpass show --" + type + " " + siteId;
+
+        var command = `lpass show --${type} ${siteId}`;
         var results = yield this.get_command(command, masterpass);
+
         if (/enter the LastPass master password/.test(results.error)) {
             debug(`password protected entry found - need to re-enter LastPass master password`);
             this.ensure_we_have_masterpassword();
@@ -261,6 +245,7 @@
     LastPass.prototype.get_username_and_password = function(siteId) {
         assertNotEmpty(siteId, 'siteId');
         debug(`retrieving username and password for site with id ${siteId}`);
+
         var username = yield this.get_lastpass_value(siteId, 'username');
         var password = yield this.get_lastpass_value(siteId, 'password');
 
@@ -273,13 +258,15 @@
     LastPass.prototype.get_fields = function(siteId) {
         assertNotEmpty(siteId, 'siteId');
         debug(`retrieving HTML field names and values for site ${siteId}`);
+
         var fields = yield this.get_lastpass_value(siteId, 'all');
 
         var lines = fields.data.split("\n");
         lines = lines.filter(function(line) {
             return !/URL:/.test(line);
         });
-        yield co_return(lines);
+        var ret = convert_lines_to_object(lines);
+        yield co_return(ret);
 
     };
 
@@ -287,46 +274,12 @@
         var I = this.I;
         assertNotEmpty(siteId, 'siteId');
         debug(`trying to set login and password fields in HTML for site ${siteId}`);
-        var buffer = I.buffer;
         var fields = yield this.get_fields(siteId);
-        debug(`CONFIDENTIAL: found fields ${fields} in lastpass`);
-
-        // TODO insert filter to only fill fields on the matching url to prevent phising attempts - similar to how LastPass extension does it
-        //var current_domain = this.get_current_domain();
- 
-
-        fields.forEach(function(field) {
-            debug(`CONFIDENTIDAL: setting value for field ${field}`);
-            field = field.split(":");
-            if (field.length < 2)
-                return;
-
-            var key = field[0].trim();
-            var val = field[1].trim();
-            var el = [buffer.document.getElementById(key)];
-            if (!el.length)
-                el = buffer.document.getElementsByName(key);
-            if (!el.length)
-                el = buffer.document.getElementsByClassName(key);
-
-            el = el[0];
-            if (!el){
-                debug(`could not find a field named ${key} - not setting anything for this field`);
-                return;
-            }
-            el.value = val;
-        });
+        set_login_and_password_fields(fields, I.buffer.document);
     };
 
     LastPass.prototype.get_current_domain = function(){
-        var I = this.I;
-        debug(`retrieving current domain (uses a slow hack, but it works and not too worried about performance)`);
-        var domain = I.buffer.document.location.href;
-        var tmp_a = I.buffer.document.createElement('a');
-        tmp_a.href = domain;
-        domain = tmp_a.hostname;
-        debug(`found current domain: ${domain}`);
-        return domain;
+        return get_current_domain(this.I);
     };
 
     // * Utility functions
@@ -342,6 +295,27 @@
     function assertNotEmpty(variable, variable_name) {
         assert(variable, `${variable_name} cannot be empty`);
     }
+    function get_current_domain(I){
+        debug(`retrieving current domain (uses a slow hack, but it works and not too worried about performance)`);
+        var domain = I.buffer.document.location.href;
+        var tmp_a = I.buffer.document.createElement('a');
+        tmp_a.href = domain;
+        domain = tmp_a.hostname;
+        debug(`found current domain: ${domain}`);
+        return domain;
+    };
+    function convert_lines_to_object(lines) {
+        var ret = {};
+        lines.forEach(function(it)) {
+            field = field.split(":");
+            if (field.length === 2){
+                var key = field[0].trim();
+                var val = field[1].trim();
+                ret[key] = val;
+            }
+        }
+        return ret;
+    }
     function assert(condition, message) {
         if (!condition) {
             message = message || "Assertion failed";
@@ -351,5 +325,56 @@
             throw message; // Fallback
         }
     }
+    function get_command(command, input) {
+        var results = {
+            data: "",
+            error: ""
+        };
+        var result = yield shell_command(comm,
+                                         $fds = [{ output: async_binary_string_writer(input) },
+                                                 { input: async_binary_reader(function (s) results.data+=s||"") },
+                                                 { input: async_binary_reader(function (s) results.error+=s||"") }]);
+        results.return_code = result;
+        debug(`received the following results from running the command: ${JSON.stringify(results)}`);
+        results.data = results.data.trim();
+        return results;
+    }
+
+    function get_completer(matches) {
+        var completer = new all_word_completer(
+            $completions = matches
+        );
+        return completer;
+    }
+
+    function echo_message(I, message) {
+        var window = I.window;
+        debug(`displaying following message to user: ${message}`);
+        window.minibuffer.message(message);
+    };
+    function set_login_and_password_fields(fields, document){
+        assertNotEmpty(document, 'document');
+        debug(`trying to set login and password fields in HTML using fields ${fields}`);
+
+        // TODO insert filter to only fill fields on the matching url to prevent phising attempts - similar to how LastPass extension does it
+
+        Object.keys(fields).forEach(function(key){
+            debug(`CONFIDENTIDAL: setting value for field ${field}`);
+            var val = fields[key];
+
+            var el = [document.getElementById(key)];
+            if (!el.length)
+                el = document.getElementsByName(key);
+            if (!el.length)
+                el = document.getElementsByClassName(key);
+
+            el = el[0];
+            if (!el){
+                debug(`could not find a field named ${key} - not setting anything for this field`);
+                return;
+            }
+            el.value = val;
+        });
+    };
 
 })();
