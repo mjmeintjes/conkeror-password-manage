@@ -49,7 +49,7 @@
         debug(`asking user for domain, but providing ${domain} as default`);
         domain = yield I.minibuffer.read($prompt = "domain: ", $initial_value=domain, $select = true);
         if (!domain){
-            lp.echo_message("No domain specified - must specify a domain in order to create new entry");
+            user.display_message("No domain specified - must specify a domain in order to create new entry");
             return;
         }
 
@@ -57,28 +57,24 @@
         username = yield I.minibuffer.read($prompt = "username: ", $initial_value=username,
                                            $select = true, $history = "passwd-usernames");
         if (!username){
-            lp.echo_message("No username specified - must specify a username in order to create new entry");
+            user.display_message("No username specified - must specify a username in order to create new entry");
             return;
         }
-        var completer = new all_word_completer(
-            $completions = [6,8,12,16,20].map(function(num){return num.toString();})
-        );
+
         var length = 12;
         debug(`asking user for length, but providing ${length} as default`);
-        length = yield I.minibuffer.read($prompt = "length",
-                                         $completer = completer,
-                                         $require_match = true,
-                                         $select = true,
-                                         $auto_complete_initial = true,
-                                         $initial_value = length,
-                                         $auto_complete = true
-                                        );
+        var lengths = [6,8,12,16,20].map(function(num){return num.toString();});
+        length = user.ask_to_select("length: ", lengths, length);
         var symbols = yield I.minibuffer.read_yes_or_no($prompt = "include symbols? ", $initial_value='yes');
 
         var password = yield lp.generate_and_save_password(domain, username, length, symbols);
         debug(`CONFIDENTIAL: retrieved password ${password} from lastpass`);
         setup_value_paster(I, password, 'password');
-        lp.echo_message(`Press ${passwd_manage_password_paste_key} to paste password into password field`);
+        browser.set_login_and_password_fields({
+            username: username,
+            password: password
+        });
+        user.display_message(`Press ${passwd_manage_password_paste_key} to paste password into password field`);
     }
 
     function get_username_and_password(I) {
@@ -95,12 +91,20 @@
         yield lp.set_login_and_password_fields(id);
         debug(`tried to auto fill login and password fields - setting up paster for username and then password in case that failed`);
         var ret = yield lp.get_username_and_password(id);
-        setup_value_paster(I, ret.username, 'username', function(){
-            debug(`now loading password into the one-shot paster`);
+
+        function set_password_paster(){
             setup_value_paster(I, ret.password, 'password');
-            lp.echo_message(`Press ${passwd_manage_password_paste_key} to paste password into password field`);
-        });
-        lp.echo_message(`Press ${passwd_manage_password_paste_key} to paste username into username field`);
+            user.display_message(`Press ${passwd_manage_password_paste_key} to paste password into password field`);
+        }
+        if (ret.username){
+            setup_value_paster(I, ret.username, 'username', function(){
+                debug(`now loading password into the one-shot paster`);
+                setup_password_paster();
+            });
+            user.display_message(`Press ${passwd_manage_password_paste_key} to paste username into username field`);
+        } else {
+            setup_password_paster();
+        }
     }
 
     function setup_value_paster(I, value, type, onSuccess=null){
@@ -145,7 +149,13 @@
 
         yield co_return(answer);
     };
-    UserInteraction.prototype.ask_to_select(question, options, default_option=null) {
+
+    UserInteraction.prototype.ask_for_password = function(question, _args={}) {
+        //todo: make passwords hidden when typing in
+        yield co_return(this.ask(question, _args));
+    };
+
+    UserInteraction.prototype.ask_to_select = function(question, options, default_option=null) {
         if (!default_option){
             default_option = options[0];
         }
@@ -157,7 +167,8 @@
             auto_complete_initial:  true,
             auto_complete:  true
         });
-    }
+        return co_return(answer);
+    };
 
     UserInteraction.prototype.display_message = function(message) {
         var window = this.I.window;
@@ -170,12 +181,19 @@
         this.I = I;
     };
 
-    BrowserInteraction.prototype.set_login_and_password_fields = function(fields){
+    BrowserInteraction.prototype.set_login_and_password_fields = function(password_domain, fields){
         var document = I.buffer.document;
+        assertNotEmpty(password_domain, 'password_domain');
         assertNotEmpty(document, 'document');
         debug(`trying to set login and password fields in HTML using fields ${fields}`);
 
+        var current_domain = this.get_current_domain();
+        if (this.get_hostname(password_domain) !== current_domain){
+            throw new interactive_error("cannot set fields because current domain does not match the domain set for the password");
+        }
         // TODO insert filter to only fill fields on the matching url to prevent phising attempts - similar to how LastPass extension does it
+        // TODO set password on any found input fields with type=password
+        // TODO set username on common username fields (extract from my current LastPass)
 
         Object.keys(fields).forEach(function(key){
             debug(`CONFIDENTIDAL: setting value for field ${fields[key]}`);
@@ -198,12 +216,17 @@
 
     BrowserInteraction.prototype.get_current_domain = function(){
         var I = this.I;
+        var current_url = I.buffer.document.location.href;
+        return this.get_hostname(current_url);
+    };
+
+    BrowserInteraction.prototype.get_hostname = function(url){
+        var I = this.I;
         debug(`retrieving current domain (uses a slow hack, but it works and not too worried about performance)`);
-        var domain = I.buffer.document.location.href;
         var tmp_a = I.buffer.document.createElement('a');
-        tmp_a.href = domain;
-        domain = tmp_a.hostname;
-        debug(`found current domain: ${domain}`);
+        tmp_a.href = url;
+        var domain = tmp_a.hostname;
+        debug(`extracted ${domain} hostname from url ${url}`);
         return domain;
     };
 
@@ -247,11 +270,7 @@
     LastPass.prototype.ensure_we_have_masterpassword = function(force) {
         if (this.masterpassword && !force)
             return;
-        this.masterpassword = yield this.user.ask( "please enter lastpass master password: ");
-    };
-
-    LastPass.prototype.echo_message = function(message) {
-        this.user.display_message(message);
+        this.masterpassword = yield this.user.ask_for_password( "please enter lastpass master password: ");
     };
 
     LastPass.prototype.get_command = function(comm, input, force_masterpass_ask=false){
@@ -320,7 +339,7 @@
         assertNotEmpty(siteId, 'siteId');
         debug(`trying to set login and password fields in HTML for site ${siteId}`);
         var fields = yield this._get_fields(siteId);
-        this.browser.set_login_and_password_fields(fields);
+        this.browser.set_login_and_password_fields(fields.URL, fields);
     };
 
     LastPass.prototype._get_lastpass_value = function(siteId, type, masterpass=""){
@@ -345,9 +364,9 @@
         var fields = yield this._get_lastpass_value(siteId, 'all');
 
         var lines = fields.data.split("\n");
-        lines = lines.filter(function(line) {
+        /*lines = lines.filter(function(line) {
             return !/URL:/.test(line);
-        });
+        });*/
         var ret = convert_lines_to_object(lines);
         yield co_return(ret);
 
