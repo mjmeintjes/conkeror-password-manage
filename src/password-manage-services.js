@@ -62,6 +62,11 @@
         yield co_return(selected);
     };
     UserInteraction.prototype.ask_to_select = function(question, options, default_option=null) {
+        utils.assertNotEmpty(options, 'options');
+        utils.assertNotEmpty(question, 'question');
+        if (!options.length) {
+            throw new interactive_error('no options found');
+        }
         if (!default_option){
             default_option = options[0];
         }
@@ -94,14 +99,18 @@
         var document = I.buffer.document;
         utils.assertNotEmpty(password_domain, 'password_domain');
         utils.assertNotEmpty(fields, 'fields');
-        utils.debug(`trying to set login and password fields in HTML using fields ${fields}`);
+        utils.debug(`trying to set login and password fields in HTML using fields ${utils.obj2str(fields)}`);
+        utils.assertNotEmpty(fields.password, 'password');
 
         var current_domain = this.get_current_domain();
         if (this.get_hostname(password_domain) !== current_domain){
             throw new interactive_error("cannot set fields because current domain does not match the domain set for the password");
         }
-        // TODO insert filter to only fill fields on the matching url to prevent phising attempts - similar to how LastPass extension does it
-        // TODO set password on any found input fields with type=password
+        var password_elements = I.buffer.document.querySelectorAll("input[type=password]");
+        if (password_elements.length){
+            utils.debug(`setting field ${password_elements[0]} to ${fields.password}`);
+            password_elements[0].value = fields.password;
+        }
         // TODO set username on common username fields (extract from my current LastPass)
 
         Object.keys(fields).forEach(function(key){

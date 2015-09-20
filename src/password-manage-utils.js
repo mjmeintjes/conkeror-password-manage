@@ -4,7 +4,7 @@
     // * Utility functions
     // ** Debug function - ONLY FOR USE DURING DEVELOPMENT, as this function will send sensitive information like passwords to the console log
     Utils.prototype.debug = function(msg){
-        if (typeof passwd_manage_debug_p !== 'undefined' && passwd_manage_debug_p){
+        if (password_manage_debug_p){
             dumpln("PASSWD-MANAGE: " + msg);
         }
     };
@@ -17,12 +17,10 @@
     Utils.prototype.convert_lines_to_object = function(lines) {
         var ret = {};
         lines.forEach(function(field) {
-            field = field.split(":");
-            if (field.length === 2){
-                var key = field[0].trim();
-                var val = field[1].trim();
-                ret[key] = val;
-            }
+            field = field.split(/:(.+)?/);
+            var key = field[0].trim();
+            var val = field[1].trim();
+            ret[key] = val;
         });
         return ret;
     };
@@ -48,6 +46,7 @@
     var utils = new Utils();
     utils.debug(`adding utils installation function to conkeror (${conkeror}) namespace`);
     conkeror.install_password_manage_utils = function(scope) {
+        dump_obj(scope);
         scope.utils = utils;
     };
     install_password_manage_utils(this);

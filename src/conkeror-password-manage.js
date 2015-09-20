@@ -1,54 +1,40 @@
 (function(){
     // * Conkeror Password Manager
-    require('password-manage-utils');
-    install_password_manage_utils(this);
-    require('password-manage-hooks');
-    require('password-manage-services');
-
-    utils.info(`loading passwd-manage module: provides functionality to use external password managers to retrieve and add passwords for Conkeror`);
-    utils.info(`currently only supports LastPass (http://www.lastpass.com)`);
-
-    define_variable("passwd_manage_lastpass_username", "",
-                    "Default username to login to LastPass");
-    define_variable("passwd_manage_setup_keybindings_p", true,
-                    "NOT WORKING? - Whether to setup the default keybindings");
-    define_variable("passwd_manage_password_paste_key", "C-j",
+    define_variable("password_manage_generate_password_shortcut", "C-w x",
+                    "Press to generate password for current site");
+    define_variable("password_manage_password_paste_key", "C-t",
                     "Key to use to paste passwords and usernames into focused text boxes");
-    define_variable("passwd_manage_debug_p", false,
+    define_variable("password_manage_lastpass_username", "",
+                    "Default username to login to LastPass");
+    define_variable("password_manage_setup_keybindings_p", true,
+                    "NOT WORKING? - Whether to setup the default keybindings");
+    define_variable("password_manage_debug_p", false,
                     "Enable debug mode. " +
                     "WARNING - this will print confidential material, like your passwords, to the console, and possible other logs!");
     define_variable("password_manage_settings", [],
                     "Register and enable different password managers");
+
+    require('password-manage-utils');
+    install_password_manage_utils(this);
+    require('password-manage-hooks');
+    require('password-manage-services');
+    provide("conkeror-password-manage");
+
+    utils.info(`loading passwd-manage module: provides functionality to use external password managers to retrieve and add passwords for Conkeror`);
+    utils.info(`currently only supports LastPass (http://www.lastpass.com)`);
+
     // ** Public API / Conkeror integration
     interactive("passwd-generate-and-save",
                 "generates and saves a password for the provided username and domain",
                 generate_and_save);
     interactive("passwd-get-username-and-password",
                 "retrieves the username and password for given domain, " +
-                "sets 'passwd_manage_password_paste_key' to paste username and then password into focused fields",
+                "sets 'password_manage_password_paste_key' to paste username and then password into focused fields",
                 get_username_and_password);
-    interactive("passwd-set-lastpass-username",
-                "sets the default lastpass username",
-                set_lastpass_username);
 
-    define_key(content_buffer_text_keymap, passwd_manage_password_paste_key, `passwd-set-value`);
-    define_key(default_global_keymap, "C-t", "passwd-get-username-and-password");
-    define_key(default_global_keymap, "C-x w", "passwd-generate-and-save");
-    provide("conkeror-password-manage");
-
-
-    // ** Implementation
-    function set_lastpass_username(I) {
-        passwd_manage_lastpass_username = yield I.minibuffer.read($prompt = "enter LastPass username",
-                                                                  $initial_value=passwd_manage_lastpass_username,
-                                                                  $select = true);
-    }
-
-    require('password-manage-lastpass');
-    require('password-manage-pass');
     function generate_and_save(I) {
         utils.info('starting to generate and save a new password');
-        var username = passwd_manage_lastpass_username,
+        var username,
             domain = "",
             lengths = [6,8,12,16,20],
             length,
@@ -57,14 +43,9 @@
             generator_name,
             fields;
         var services = init_and_get_services(password_manage_settings, I);
-        var browser = services.browser
-;
+        var browser = services.browser;
         var user = services.user;
-        var generators = get_password_generators();
-        if (!generators.length) {
-            throw new interactive_error('no password generators registered');
-        }
-        generator_name = yield user.ask_to_select("password manager: ", generators);
+        generator_name = yield select_password_manager(user, 'generator', get_password_generators());
 
         domain = browser.get_current_domain();
         domain = yield user.ask_if_different("domain: ", domain);
@@ -81,36 +62,41 @@
         setup_paster(I, user, fields);
         browser.set_login_and_password_fields(domain, fields);
     }
+    function select_password_manager(user, type, options){
+        if (!options.length) {
+            throw new interactive_error(`no password ${type} registered`);
+        }
+        var manager_name = yield user.ask_to_select("password manager: ", options);
+        yield co_return(manager_name);
+    }
 
     function get_username_and_password(I) {
-        utils.debug(`retrieving username and password from password manager (LastPass)`);
-        var user = new UserInteraction(I);
-        var browser = new BrowserInteraction(I);
-        var lp = new LastPass(user, browser, passwd_manage_lastpass_username);
+        utils.debug(`retrieving username and password from password manager`);
+        var services = init_and_get_services(password_manage_settings, I);
+        var browser = services.browser;
+        var user = services.user;
+        var generator_name = yield select_password_manager(user, 'retriever', get_password_retrievers());
         var domain = browser.get_current_domain();
-        domain = yield I.minibuffer.read($prompt = "domain search: ", $initial_value=domain,
-                                         $select = true
-                                        );
-        var id = yield lp.get_site_id_for_domain(domain);
-        utils.debug(`after searching for domain ${domain}, found site with id ${id}`);
-        yield lp.set_login_and_password_fields(id);
-        utils.debug(`tried to auto fill login and password fields - setting up paster for username and then password in case that failed`);
-        var fields = yield lp.get_username_and_password(id);
+        domain = yield user.ask_if_different("domain: ", domain);
+        var fields = yield let_retriever_get_username_and_password(generator_name, domain);
+        browser.set_login_and_password_fields(fields.url || fields.URL || domain, fields);
         setup_paster(I, user, fields);
     }
 
     function setup_paster(I, user, fields){
+        utils.debug(`setting up one shot pasters with fields ${utils.obj2str(fields)}`);
         function setup_password_paster(){
             setup_value_paster(I, fields.password, 'password');
-            user.display_message(`Press ${passwd_manage_password_paste_key} to paste password into password field`);
+            user.display_message(`Press ${password_manage_password_paste_key} to paste password into password field`);
         }
         if (fields.username){
             setup_value_paster(I, fields.username, 'username', function(){
                 utils.debug(`now loading password into the one-shot paster`);
                 setup_password_paster();
             });
-            user.display_message(`Press ${passwd_manage_password_paste_key} to paste username into username field`);
+            user.display_message(`Press ${password_manage_password_paste_key} to paste username into username field`);
         } else {
+            utils.debug('no username supplied, only pasting password');
             setup_password_paster();
         }
     }

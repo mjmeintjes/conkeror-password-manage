@@ -9,7 +9,7 @@
         var pass = new Pass(services.user, services.browser, services.shell, args);
         var name = `pass - ${args.username}`;
         register_password_generator(name, pass.generate_and_save_password.bind(pass));
-        //register_password_retriever(name, pass.get_username_and_password.bind(pass));
+        register_password_retriever(name, pass.get_username_and_password.bind(pass));
     }
     register_password_manager_installer(register_self);
 
@@ -26,33 +26,47 @@
         utils.assertNotEmpty(username, 'username');
         utils.assertNotEmpty(length, 'length');
         utils.debug(`using pass to generate password, and then save that password against the supplied username and domain`);
-        var no_symbols = include_symbol ? "--no-symbols" : "";
         var name = utils.string_format(this.password_name_template, {
             domain: domain,
             username: username
         });
         utils.debug(`testing if a password named ${name} already exists`);
-        //doing it the hard way because 'pass' seems to assume 'forced' when running from Conkeror
-        var existing = yield this.get_command(`pass show "${name}" | ${STRIP_COLORS}`, "", function(results){
-            utils.debug("EXISTING: " + utils.obj2str(results));
-            if (/not in the password store/.test(results.error)){
-                return true;
-            }
-            throw new interactive_error(`could not generate password named ${name} as one already exists`);
-        });
-        var command = `pass generate ${no_symbols} "${name}" ${length} | ${STRIP_COLORS}`; 
-        var results = yield this.get_command(command);
-        if (/entry already exists/m.test(results.data)){
-            throw new interactive_error(`could not generate password named ${name} as one already exists`);
+        var existing_passwords = yield this.list_passwords();
+        if (existing_passwords.indexOf(name) !== -1){
+            throw new interactive_error(`could not generate password named '${name}' as one already exists`);
         }
-
-        var result = clean_output(results.data);
-        yield co_return(result);
+        var symbols = include_symbol ? "--symbols" : "";
+        var password = yield this.get_command(`pwgen ${symbols} ${length} 1`);
+        password = password.data;
+        var input = `${password}
+username:${username}
+url:${domain}
+`;
+        var results = yield this.get_command(`pass insert -m -f "${name}"`, input);
+        yield co_return(password);
     };
+    Pass.prototype.get_username_and_password = function(domain) {
+        utils.debug(`retrieving username and password for ${domain}`);
+        var passwords = yield this.list_passwords();
+        var site = yield this.user.ask_to_select("select site: ", passwords, domain);
+        var fields = yield this.get_command(`pass show "${site}"`);
+        fields = `password:${fields.data}`.split('\n');
+        fields = utils.convert_lines_to_object(fields);
+        yield co_return(fields);
+    };
+
     function clean_output(output) {
         output = output.split("\n");
         return output[1];
     }
+    Pass.prototype.list_passwords = function() {
+        var results = yield this.get_command('find $HOME/.password-store/ -name "*.gpg"');
+        var passwords = results.data.split("\n");
+        passwords = passwords.map(function(pass){
+            return pass.split(".password-store/")[1].replace('.gpg', '');
+        });
+        yield co_return(passwords);
+    };
     Pass.prototype.get_command = function(comm, input, error_ok_func=null){
         utils.debug(`executing provided shell command: ${comm} and returning results as an object containing data, error and return_code`);
         utils.assertNotEmpty(comm, "comm");
@@ -61,12 +75,18 @@
         var results = yield this.shell.get_command(comm, input);
 
         if (error_ok_func && !error_ok_func(results)){
-            if (!results.data && results.error) {
-                throw new interactive_error(`error received from Pass - ${results.error}`);
-            }
-            else if (!results.error && !results.data){
-                throw new interactive_error(`no result retrieved from Pass`);
-            }
+            yield co_return(results);
+            return;
+        }
+        if (/cancelled by user/.test(results.error)) {
+            utils.debug(`user cancelled`);
+            throw new interactive_error(`cancelled password prompt`);
+        }
+        else if (!results.data && results.error) {
+            throw new interactive_error(`error received from Pass - ${results.error}`);
+        }
+        else if (!results.error && !results.data){
+            throw new interactive_error(`no result retrieved from Pass`);
         }
         yield co_return(results);
     };

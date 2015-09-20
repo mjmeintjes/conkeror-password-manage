@@ -1,12 +1,17 @@
 (function() {
     require('password-manage-hooks');
+    require('password-manage-utils');
     function register_self(args, services){
         utils.debug(`checking if we should register lastpass manager for arguments ${args}`);
         if (args.type == 'lastpass') {
             var lp = new LastPass(services.user, services.browser, services.shell, args.username);
             var name = `lastpass - ${args.username}`;
             register_password_generator(name, lp.generate_and_save_password.bind(lp));
-            register_password_retriever(name, lp.get_username_and_password.bind(lp));
+            register_password_retriever(name, function(domain) {
+                var site_id = yield lp.get_site_id_for_domain(domain);
+                var fields = yield lp.get_username_and_password(site_id);
+                yield co_return(fields);
+            });
         }
     }
     register_password_manager_installer(register_self);
@@ -43,17 +48,11 @@
         yield co_return(ret);
     };
 
-    var count = 0;
-
     LastPass.prototype.get_command = function(comm, input){
         utils.debug(`executing provided shell command: ${comm} and returning results as an object containing data, error and return_code`);
         utils.assertNotEmpty(comm, "comm");
         var self = this;
         var masterpassword;
-        count += 1;
-        if (count > 3){
-            throw new Error('Recursion');
-        }
 
         var results = yield this.shell.get_command(comm, input);
 
@@ -105,7 +104,7 @@
         }
         else {
             utils.debug(`more than 1 matching entry found, asking user to select the correct site - found ${matches}`);
-            var site = yield this.user.ask_to_select(matches);
+            var site = yield this.user.ask_to_select("select site: ", matches);
             id = site.match(/id: (\d*)\]/)[1];
             utils.debug(`user chose site ${site} with id ${id}`);
         }
@@ -142,7 +141,7 @@
         var fields = yield this._get_lastpass_value(siteId, 'all');
 
         var lines = fields.data.split("\n");
-        var ret = convert_lines_to_object(lines);
+        var ret = utils.convert_lines_to_object(lines);
         yield co_return(ret);
 
     };

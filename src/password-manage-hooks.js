@@ -43,10 +43,12 @@
     };
 
     conkeror.register_password_generator = function (name, func){
+        utils.debug(`registering password generator ${name}`);
         password_generators[name] = func;
     };
 
     conkeror.register_password_retriever = function(name, func){
+        utils.debug(`registering password retriever ${name}`);
         password_retrievers[name] = func;
     };
 
@@ -61,23 +63,15 @@
         return password_generators[name](domain, username, length, include_symbols);
     };
 
-    conkeror.let_retriever_get_username_and_password = function(name, site_id) {
-        return password_retrievers[name](site_id);
+    conkeror.let_retriever_get_username_and_password = function(name, domain) {
+        utils.debug(`executing password_retriever: ${password_retrievers[name]}`);
+        var fields = yield password_retrievers[name](domain);
+        utils.debug(`found fields ${utils.obj2str(fields)}`);
+        var ret = {};
+        Object.keys(fields).forEach(function(key) {
+            ret[key.toLowerCase()] = fields[key];
+        });
+        yield co_return(ret);
     };
 
-    conkeror.create_generate_and_save_password_func = function(name, command_gen_func, result_process_func) {
-        var generate_and_save_password = function (domain, username, length, include_symbols=true) {
-            utils.debug(`using ${name} to generate password, and then save that password against the supplied username and domain`);
-            utils.assertNotEmpty(domain, 'domain');
-            utils.assertNotEmpty(username, 'username');
-            utils.assertNotEmpty(length, 'length');
-
-            var command = command_gen_func(domain, username, length, include_symbols);
-            var results = yield this.get_command(command);
-            var result = result_process_func(results.data);
-            yield co_return(results.data);
-        };
-        return generate_and_save_password;
-    };
-    
 })();
