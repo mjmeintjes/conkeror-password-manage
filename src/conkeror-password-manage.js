@@ -14,14 +14,14 @@
     define_variable("password_manage_settings", [],
                     "Register and enable different password managers");
 
+    require('browser-polyfill');
     require('password-manage-utils');
-    install_password_manage_utils(this);
     require('password-manage-hooks');
     require('password-manage-services');
     provide("conkeror-password-manage");
 
-    utils.info(`loading passwd-manage module: provides functionality to use external password managers to retrieve and add passwords for Conkeror`);
-    utils.info(`currently only supports LastPass (http://www.lastpass.com)`);
+    pmutils.info(`loading passwd-manage module: provides functionality to use external password managers to retrieve and add passwords for Conkeror`);
+    pmutils.info(`currently only supports LastPass (http://www.lastpass.com)`);
 
     // ** Public API / Conkeror integration
     interactive("passwd-generate-and-save",
@@ -33,7 +33,7 @@
                 get_username_and_password);
 
     function generate_and_save(I) {
-        utils.info('starting to generate and save a new password');
+        pmutils.info('starting to generate and save a new password');
         var username,
             domain = "",
             lengths = [6,8,12,16,20],
@@ -45,16 +45,16 @@
         var services = init_and_get_services(password_manage_settings, I);
         var browser = services.browser;
         var user = services.user;
-        generator_name = yield select_password_manager(user, 'generator', get_password_generators());
+        generator_name = yield ( select_password_manager(user, 'generator', get_password_generators()) );
 
         domain = browser.get_current_domain();
-        domain = yield user.ask_if_different("domain: ", domain);
-        username = yield user.ask_if_different("username: ", username);
-        length = yield user.ask_to_select_number("length: ", 12, lengths);
-        symbols = yield I.minibuffer.read_yes_or_no($prompt = "include symbols? ", $initial_value='yes');
-        password = yield let_generator_generate_and_save_password(generator_name, domain, username, length, symbols);
+        domain = yield ( user.ask_if_different("domain: ", domain) );
+        username = yield ( user.ask_if_different("username: ", username) );
+        length = yield ( user.ask_to_select_number("length: ", 12, lengths) );
+        symbols = yield ( I.minibuffer.read_yes_or_no($prompt = "include symbols? ", $initial_value='yes') );
+        password = yield ( let_generator_generate_and_save_password(generator_name, domain, username, length, symbols) );
 
-        utils.debug(`CONFIDENTIAL: retrieved password ${password} from ${generator_name}`);
+        pmutils.debug(`CONFIDENTIAL: retrieved password ${password} from ${generator_name}`);
         fields = {
             username: username,
             password: password
@@ -66,46 +66,46 @@
         if (!options.length) {
             throw new interactive_error(`no password ${type} registered`);
         }
-        var manager_name = yield user.ask_to_select("password manager: ", options);
-        yield co_return(manager_name);
+        var manager_name = yield ( user.ask_to_select("password manager: ", options) );
+        yield ( co_return(manager_name) );
     }
 
     function get_username_and_password(I) {
-        utils.debug(`retrieving username and password from password manager`);
+        pmutils.debug(`retrieving username and password from password manager`);
         var services = init_and_get_services(password_manage_settings, I);
         var browser = services.browser;
         var user = services.user;
-        var generator_name = yield select_password_manager(user, 'retriever', get_password_retrievers());
+        var generator_name = yield ( select_password_manager(user, 'retriever', get_password_retrievers()) );
         var domain = browser.get_current_domain();
-        domain = yield user.ask_if_different("domain: ", domain);
-        var fields = yield let_retriever_get_username_and_password(generator_name, domain);
+        domain = yield ( user.ask_if_different("domain: ", domain) );
+        var fields = yield ( let_retriever_get_username_and_password(generator_name, domain) );
         browser.set_login_and_password_fields(fields.url || fields.URL || domain, fields);
         setup_paster(I, user, fields);
     }
 
     function setup_paster(I, user, fields){
-        utils.debug(`setting up one shot pasters with fields ${utils.obj2str(fields)}`);
+        pmutils.debug(`setting up one shot pasters with fields ${pmutils.obj2str(fields)}`);
         function setup_password_paster(){
             setup_value_paster(I, fields.password, 'password');
             user.display_message(`Press ${password_manage_password_paste_key} to paste password into password field`);
         }
         if (fields.username){
             setup_value_paster(I, fields.username, 'username', function(){
-                utils.debug(`now loading password into the one-shot paster`);
+                pmutils.debug(`now loading password into the one-shot paster`);
                 setup_password_paster();
             });
             user.display_message(`Press ${password_manage_password_paste_key} to paste username into username field`);
         } else {
-            utils.debug('no username supplied, only pasting password');
+            pmutils.debug('no username supplied, only pasting password');
             setup_password_paster();
         }
     }
     function setup_value_paster(I, value, type, onSuccess=null){
-        utils.debug(`CONFIDENTIAL: initialising interactive function to paste ${type} ${value} into focused input HTML element`);
+        pmutils.debug(`CONFIDENTIAL: initialising interactive function to paste ${type} ${value} into focused input HTML element`);
         if (!onSuccess){
-            utils.debug(`CONFIDENTIAL: no onSuccess provided, which means that we are finished after pasting ${value} one time`);
+            pmutils.debug(`CONFIDENTIAL: no onSuccess provided, which means that we are finished after pasting ${value} one time`);
             onSuccess = function() {
-                utils.debug(`unbinding the passwd-set-value function, because we don't want passwords to be pasted by accident`);
+                pmutils.debug(`unbinding the passwd-set-value function, because we don't want passwords to be pasted by accident`);
                 interactive(`passwd-set-value`,
                             "does nothing - no password set",
                             function() {}
@@ -117,7 +117,7 @@
 
                     function(I) {
                         if (I.buffer.focused_element){
-                            utils.debug(`CONFIDENTIAL: pasting value ${value} into the focused field`);
+                            pmutils.debug(`CONFIDENTIAL: pasting value ${value} into the focused field`);
                             I.buffer.focused_element.value=value;
                         }
                         onSuccess();
