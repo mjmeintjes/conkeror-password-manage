@@ -21,7 +21,7 @@
         this.shell = shell;
     };
     var STRIP_COLORS = String.raw`sed -r "s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]//g"`;
-    Pass.prototype.generate_and_save_password = function(domain, username, length, include_symbol) {
+    Pass.prototype.generate_and_save_password = function*(domain, username, length, include_symbol) {
         pmutils.assertNotEmpty(domain, 'domain');
         pmutils.assertNotEmpty(username, 'username');
         pmutils.assertNotEmpty(length, 'length');
@@ -45,7 +45,7 @@ url:${domain}
         var results = yield ( this.get_command(`pass insert -m -f "${name}"`, input) );
         yield ( co_return(password) );
     };
-    Pass.prototype.get_username_and_password = function(domain) {
+    Pass.prototype.get_username_and_password = function*(domain) {
         pmutils.debug(`retrieving username and password for ${domain}`);
         var passwords = yield ( this.list_passwords() );
         var site = yield ( this.user.ask_to_select("select site: ", passwords, domain) );
@@ -59,7 +59,7 @@ url:${domain}
         output = output.split("\n");
         return output[1];
     }
-    Pass.prototype.list_passwords = function() {
+    Pass.prototype.list_passwords = function*() {
         var results = yield ( this.get_command('find $HOME/.password-store/ -name "*.gpg"') );
         var passwords = results.data.split("\n");
         passwords = passwords.map(function(pass){
@@ -67,7 +67,7 @@ url:${domain}
         });
         yield ( co_return(passwords) );
     };
-    Pass.prototype.get_command = function(comm, input, error_ok_func=null){
+    Pass.prototype.get_command = function*(comm, input, error_ok_func=null){
         pmutils.debug(`executing provided shell command: ${comm} and returning results as an object containing data, error and return_code`);
         pmutils.assertNotEmpty(comm, "comm");
         var self = this;

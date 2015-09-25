@@ -7,7 +7,7 @@
             var lp = new LastPass(services.user, services.browser, services.shell, args.username);
             var name = `lastpass - ${args.username}`;
             register_password_generator(name, lp.generate_and_save_password.bind(lp));
-            register_password_retriever(name, function(domain) {
+            register_password_retriever(name, function*(domain) {
                 var site_id = yield ( lp.get_site_id_for_domain(domain) );
                 var fields = yield ( lp.get_username_and_password(site_id) );
                 yield ( co_return(fields) );
@@ -25,7 +25,7 @@
         this.masterpassword = null;
     };
 
-    LastPass.prototype.generate_and_save_password = function (domain, username, length, include_symbols=true) {
+    LastPass.prototype.generate_and_save_password = function* (domain, username, length, include_symbols=true) {
         pmutils.debug("using lastpass to generate password, and then save that password against the supplied username and domain");
         pmutils.assertNotEmpty(domain, 'domain');
         pmutils.assertNotEmpty(username, 'username');
@@ -40,7 +40,7 @@
         yield ( co_return(results.data) );
     };
 
-    LastPass.prototype.get_username_and_password = function(siteId) {
+    LastPass.prototype.get_username_and_password = function*(siteId) {
         pmutils.assertNotEmpty(siteId, 'siteId');
         pmutils.debug(`retrieving username and password for site with id ${siteId}`);
 
@@ -48,7 +48,7 @@
         yield ( co_return(ret) );
     };
 
-    LastPass.prototype.get_command = function(comm, input){
+    LastPass.prototype.get_command = function*(comm, input){
         pmutils.debug(`executing provided shell command: ${comm} and returning results as an object containing data, error and return_code`);
         pmutils.assertNotEmpty(comm, "comm");
         var self = this;
@@ -77,7 +77,7 @@
         yield ( co_return(results) );
     };
 
-    LastPass.prototype.search_lpass_for_domain = function(domain) {
+    LastPass.prototype.search_lpass_for_domain = function*(domain) {
         pmutils.debug(`searching lastpass for the provided domain: ${domain}`);
         pmutils.assertNotEmpty(domain, 'domain');
 
@@ -92,7 +92,7 @@
         yield ( co_return(matches) );
     };
 
-    LastPass.prototype.get_site_id_for_domain = function(domain){
+    LastPass.prototype.get_site_id_for_domain = function*(domain){
         pmutils.debug(`retrieving site id from lastpass by searching for the provided domain: ${domain}`);
         pmutils.assertNotEmpty(domain, 'domain');
 
@@ -112,14 +112,14 @@
         yield ( co_return(id) );
     };
 
-    LastPass.prototype.set_login_and_password_fields = function(siteId){
+    LastPass.prototype.set_login_and_password_fields = function*(siteId){
         pmutils.assertNotEmpty(siteId, 'siteId');
         pmutils.debug(`trying to set login and password fields in HTML for site ${siteId}`);
         var fields = yield ( this._get_fields(siteId) );
         this.browser.set_login_and_password_fields(fields.URL, fields);
     };
 
-    LastPass.prototype._get_lastpass_value = function(siteId, type, masterpassword){
+    LastPass.prototype._get_lastpass_value = function*(siteId, type, masterpassword){
         pmutils.assertNotEmpty(siteId, 'siteId');
         pmutils.debug(`querying lastpass site ${siteId} for ${type}`);
 
@@ -134,7 +134,7 @@
         yield ( co_return(results) );
     };
 
-    LastPass.prototype._get_fields = function(siteId) {
+    LastPass.prototype._get_fields = function*(siteId) {
         pmutils.assertNotEmpty(siteId, 'siteId');
         pmutils.debug(`retrieving HTML field names and values for site ${siteId}`);
 

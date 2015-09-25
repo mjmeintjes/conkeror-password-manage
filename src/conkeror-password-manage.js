@@ -14,7 +14,6 @@
     define_variable("password_manage_settings", [],
                     "Register and enable different password managers");
 
-    require('browser-polyfill');
     require('password-manage-utils');
     require('password-manage-hooks');
     require('password-manage-services');
@@ -32,7 +31,7 @@
                 "sets 'password_manage_password_paste_key' to paste username and then password into focused fields",
                 get_username_and_password);
 
-    function generate_and_save(I) {
+    function* generate_and_save(I) {
         pmutils.info('starting to generate and save a new password');
         var username,
             domain = "",
@@ -62,7 +61,7 @@
         setup_paster(I, user, fields);
         browser.set_login_and_password_fields(domain, fields);
     }
-    function select_password_manager(user, type, options){
+    function* select_password_manager(user, type, options){
         if (!options.length) {
             throw new interactive_error(`no password ${type} registered`);
         }
@@ -70,7 +69,7 @@
         yield ( co_return(manager_name) );
     }
 
-    function get_username_and_password(I) {
+    function* get_username_and_password(I) {
         pmutils.debug(`retrieving username and password from password manager`);
         var services = init_and_get_services(password_manage_settings, I);
         var browser = services.browser;

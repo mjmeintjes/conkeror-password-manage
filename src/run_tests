@@ -1,0 +1,2 @@
+#! /usr/bin/env zsh
+conkeror -q -batch -e 'url_remoting_fn = load_rc;' -l test.js --new-instance --no-remote 2>&1 >/dev/null | sed -n -e "/TESTING STARTING/, /TESTING FINISHED/{// ! p}" 

@@ -1,8 +1,3 @@
-conkeror = GLOBAL;
-conkeror.provide = function(){};
-conkeror.password_manage_debug_p = true;
-conkeror.dumpln = console.log;
-require('browser-polyfill.js');
 var sinon = require('sinon');
 var services = require("password-manage-services.js");
 var assert = require("assert");
