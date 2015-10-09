@@ -1,2 +1,3 @@
 #! /usr/bin/env zsh
-conkeror -q -batch -e 'url_remoting_fn = load_rc;' -l test.js --new-instance --no-remote 2>&1 >/dev/null | sed -n -e "/TESTING STARTING/, /TESTING FINISHED/{// ! p}" 
+conkeror -q -batch -e 'url_remoting_fn = load_rc;'  -E "conkeror.load_paths.push('file://`pwd`');" -P test -l $1 --new-instance --no-remote #2>&1 >/dev/null | sed -n -e "/TESTING STARTING/, /TESTING FINISHED/{// ! p}" 
+    

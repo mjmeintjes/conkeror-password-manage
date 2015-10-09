@@ -1,0 +1,2 @@
+#! /usr/bin/env zsh
+conkeror -q -batch -e 'url_remoting_fn = load_rc;'  -E "conkeror.load_paths.push('file://`pwd`/src');" -P test -l $1 -e "conkeror.run_all_tests();" --new-instance --no-remote 2>&1 >/dev/null | sed -n -e "/TESTING STARTING/, /TESTING FINISHED/{// ! p}" | grep -v "reference to undefined property flags"

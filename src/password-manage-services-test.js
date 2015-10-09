@@ -1,6 +1,6 @@
-var sinon = require('sinon');
-var services = require("password-manage-services.js");
-var assert = require("assert");
+require('conktest');
+//require("password-manage-services.js");
+/*
 describe('UserInteraction', function() {
     var I = {};
     I.minibuffer = {};
@@ -30,5 +30,21 @@ describe('UserInteraction', function() {
         assert.equal(args.arg2, calledArgs.$arg2);
     });
 });
+ */
+global = conkeror;
+dumpln("*********************************START***********************");
+describe("TEST", function() {
+    dumpln("*********************************TEST***********************");
+    it('test1', function(){
+        dumpln("*********************************TESTINGfd fs p***********************");
+        assert.equal(1, 4);
+    });
+});
+dumpln("*********************************FINISHED***********************");
+var mocha = new Mocha({
+    ui: 'tdd',
+    reporter: 'list'
+});
+mocha.run();
 
 

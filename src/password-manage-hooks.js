@@ -59,10 +59,11 @@
     };
 
     conkeror.let_generator_generate_and_save_password = function(name, domain, username, length, include_symbols=true) {
+        pmutils.debug(`generating and saving password for ${name}, from possible options ${password_generators}`);
         return password_generators[name](domain, username, length, include_symbols);
     };
 
-    conkeror.let_retriever_get_username_and_password = function*(name, domain) {
+    conkeror.let_retriever_get_username_and_password = function(name, domain) {
         pmutils.debug(`executing password_retriever: ${password_retrievers[name]}`);
         var fields = yield ( password_retrievers[name](domain) );
         pmutils.debug(`found fields ${pmutils.obj2str(fields)}`);

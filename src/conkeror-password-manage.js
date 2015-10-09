@@ -31,7 +31,7 @@
                 "sets 'password_manage_password_paste_key' to paste username and then password into focused fields",
                 get_username_and_password);
 
-    function* generate_and_save(I) {
+    function generate_and_save(I) {
         pmutils.info('starting to generate and save a new password');
         var username,
             domain = "",
@@ -44,7 +44,7 @@
         var services = init_and_get_services(password_manage_settings, I);
         var browser = services.browser;
         var user = services.user;
-        generator_name = yield ( select_password_manager(user, 'generator', get_password_generators()) );
+        generator_name = yield select_password_manager(user, 'generator', get_password_generators()) ;
 
         domain = browser.get_current_domain();
         domain = yield ( user.ask_if_different("domain: ", domain) );
@@ -61,15 +61,16 @@
         setup_paster(I, user, fields);
         browser.set_login_and_password_fields(domain, fields);
     }
-    function* select_password_manager(user, type, options){
+    function select_password_manager(user, type, options){
+        pmutils.debug(`asking user to select password manager from ${options}`);
         if (!options.length) {
             throw new interactive_error(`no password ${type} registered`);
         }
-        var manager_name = yield ( user.ask_to_select("password manager: ", options) );
-        yield ( co_return(manager_name) );
+        var manager_name = yield user.ask_to_select("password manager: ", options) ;
+        yield  co_return(manager_name) ;
     }
 
-    function* get_username_and_password(I) {
+    function get_username_and_password(I) {
         pmutils.debug(`retrieving username and password from password manager`);
         var services = init_and_get_services(password_manage_settings, I);
         var browser = services.browser;
@@ -103,13 +104,14 @@
         pmutils.debug(`CONFIDENTIAL: initialising interactive function to paste ${type} ${value} into focused input HTML element`);
         if (!onSuccess){
             pmutils.debug(`CONFIDENTIAL: no onSuccess provided, which means that we are finished after pasting ${value} one time`);
-            onSuccess = function() {
-                pmutils.debug(`unbinding the passwd-set-value function, because we don't want passwords to be pasted by accident`);
-                interactive(`passwd-set-value`,
-                            "does nothing - no password set",
-                            function() {}
-                           );
-            };
+            onSuccess = function() {};
+            // onSuccess = function() {
+            //     pmutils.debug(`unbinding the passwd-set-value function, because we don't want passwords to be pasted by accident`);
+            //     interactive(`passwd-set-value`,
+            //                 "does nothing - no password set",
+            //                 function() {}
+            //                );
+            // };
         }
         interactive(`passwd-set-value`,
                     `sets the current ${type} into the current field`,

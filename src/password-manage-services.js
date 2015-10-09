@@ -13,7 +13,7 @@
         this.I = I;
     };
 
-    UserInteraction.prototype.ask = function*(question, _args={}) {
+    UserInteraction.prototype.ask = function(question, _args={}) {
         var keys = Object.keys(_args);
         var args = {};
         keys.forEach(function(key) {
@@ -27,13 +27,13 @@
         yield ( co_return(answer) );
     };
 
-    UserInteraction.prototype.ask_if_different = function*(question, current) {
+    UserInteraction.prototype.ask_if_different = function(question, current) {
         pmutils.debug(`asking user ${question} but supplying default ${current}`);
         var answer = yield ( this.ask(question, {initial_value: current, select: true, history: `passwdmanage-${question}`}) );
         yield ( co_return(answer) );
     };
 
-    UserInteraction.prototype.ask_for_password = function*(question, _args={}) {
+    UserInteraction.prototype.ask_for_password = function(question, _args={}) {
         //todo: make passwords hidden when typing in
         var I = this.I;
         var input = this.I.minibuffer.input_element;
@@ -48,12 +48,12 @@
         }
     };
 
-    UserInteraction.prototype.ask_to_select_number = function*(question, preselected, numbers) {
+    UserInteraction.prototype.ask_to_select_number = function(question, preselected, numbers) {
         numbers = numbers.map(function(num){return num.toString();});
         var selected = yield ( this.ask_to_select(question, numbers, preselected) );
         yield ( co_return(selected) );
     };
-    UserInteraction.prototype.ask_to_select = function*(question, options, default_option=null) {
+    UserInteraction.prototype.ask_to_select = function(question, options, default_option=null) {
         pmutils.assertNotEmpty(options, 'options');
         pmutils.assertNotEmpty(question, 'question');
         if (!options.length) {
@@ -143,7 +143,7 @@
     var ShellInteraction = function() {
     };
 
-    ShellInteraction.prototype.get_command = function*(command, input) {
+    ShellInteraction.prototype.get_command = function(command, input) {
         var results = {
             data: "",
             error: ""
