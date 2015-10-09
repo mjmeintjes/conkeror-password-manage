@@ -43,3 +43,5 @@ Version: 0.1
 * Licence/Legal
 See COPYING for terms
 
+* Testing
+  ./run_tests src/test.js | node_modules/.bin/tap-difflet

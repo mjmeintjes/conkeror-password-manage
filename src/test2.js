@@ -10,10 +10,10 @@ conktest_run("222 - Basic tests", {
 });
 
 conktest_run("222 - Basic tests 2", {
-    test_basic_test: function () {
+    test_basic_test2_1: function () {
         assert.equal(1, 4);
     },
-    test_basic_test2: function () {
+    test_basic_test2_2: function () {
         assert.equal(1, 1);
     }
 });
